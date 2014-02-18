@@ -32,6 +32,7 @@
 #include <mach/tfa9887.h>
 #include <mach/tpa6185.h>
 #include <mach/rt5501.h>
+#include <mach/headset_amp.h>
 
 #undef pr_info
 #undef pr_err
@@ -477,37 +478,53 @@ static struct snd_soc_ops msm8960_i2s_be_ops = {
 	.shutdown = msm8960_i2s_shutdown,
 	.hw_params = msm8960_i2s_hw_params,
 };
-static int msm_rcv_amp_on(int on)
+static int msm_hac_amp_on(int on)
 {
 	int ret = 0;
-
-	if (msm_rcv_control == on)
+	if (msm_hac_control == on)
 		return 0;
 
-	msm_rcv_control = on;
-	pr_info("%s()  %d\n", __func__, msm_rcv_control);
-	ret = gpio_request(RCV_PAMP_GPIO, "AUDIO_RCV_AMP");
+	msm_hac_control = on;
+	printk(KERN_INFO "[HAC]:%s()  %d\n", __func__, msm_hac_control);
+	//ret = gpio_request(HAC_PAMP_GPIO, "AUDIO_HAC_AMP");
 	if (ret) {
-		pr_err("%s: Error requesting GPIO %d\n", __func__,
-			RCV_PAMP_GPIO);
+		printk(KERN_INFO "%s: Error requesting GPIO %d\n", __func__,
+			HAC_PAMP_GPIO);
 			return ret;
 		}
 		else {
-			if (msm_rcv_control) {
-				pr_info("%s: enable rcv amp gpio %d\n", __func__, HAC_PAMP_GPIO);
-				usleep_range(20000,20000);
-				ret =gpio_direction_output(RCV_PAMP_GPIO, 1);
-				ret = gpio_direction_output(PM8921_GPIO_PM_TO_SYS(RCV_SPK_SEL_PMGPIO), 1);
+			if (msm_hac_control) {
+				printk(KERN_INFO "[HAC]:%s: enable hac amp gpio %d\n", __func__, HAC_PAMP_GPIO);
+				gpio_direction_output(HAC_PAMP_GPIO, 1);
 			} else {
-				pr_info("%s: disable rcv amp gpio %d\n", __func__, HAC_PAMP_GPIO);
-				gpio_direction_output(RCV_PAMP_GPIO, 0);
-				gpio_direction_output(PM8921_GPIO_PM_TO_SYS(RCV_SPK_SEL_PMGPIO), 0);
-				usleep_range(20000,20000);
+				printk(KERN_INFO "[HAC]:%s: disable hac amp gpio %d\n", __func__, HAC_PAMP_GPIO);
+				gpio_direction_output(HAC_PAMP_GPIO, 0);
 			}
-			gpio_free(RCV_PAMP_GPIO);
+			gpio_free(HAC_PAMP_GPIO);
 		}
 	return 1;
 }
+
+static unsigned int headset_on = 0;
+static unsigned int call_amplification_needed = 0;
+ 
+void headset_amp_event(unsigned int on)
+{
+    pr_info("headset_amp_event %d", on);
+    if (call_amplification_needed)
+    {
+    if (on)
+    {
+	pr_info("rcv amp off, headset is plugged --");
+	msm_hac_amp_on(0);
+    } else
+    {
+	pr_info("rcv amp on, headset is plugged off ++");
+	msm_hac_amp_on(1);
+    }
+    }
+    headset_on = on;
+ }
 
 static void msm_ext_spk_power_amp_on(u32 spk)
 {
@@ -561,9 +578,20 @@ static void msm_ext_spk_power_amp_on(u32 spk)
                         }
 
                         if(query_rt5501())
+						{
                             set_rt5501_amp(1);
+						  // hack to rcv amp, without this, earpiece is not switched on/off @tbalden. We need full htc kernel source!
+ 			    call_amplification_needed = 1;
+ 			    if (headset_on)
+ 			    {
+ 				msm_hac_amp_on(0);
+ 			    } else
+ 			    {
  				pr_info("rcv amp on, headset is not plugged");
- 				msm_rcv_amp_on(1);
+ 				msm_hac_amp_on(1);
+ 			    }
+ 			}
+ 				pr_info("rcv amp on, headset is not plugged");
 			pr_info("hs amp on--");
 			pr_info("%s: slepping 4 ms after turning on external "
 				" Bottom Speaker Ampl\n", __func__);
@@ -666,11 +694,20 @@ static void msm_ext_spk_power_amp_off(u32 spk)
                 }
 
                 if(query_rt5501())
+				{
                     set_rt5501_amp(0);
+				  // hack to rcv amp, without this, earpiece is not switched on/off
+ 		    call_amplification_needed = 0;
+ 		    if (headset_on)
+ 		    {
+ 			msm_hac_amp_on(0);
+ 		    } else
+ 		    {
+ 			pr_info("rcv amp off, headset is not plugged");
+ 			msm_hac_amp_on(0);
+ 		    }
+ 		}
 		pr_info("rcv amp off, headset is not plugged");
-		msm_rcv_amp_on(0);
-		set_handset_amp(0);
-                    gpio_direction_output(PM8921_GPIO_PM_TO_SYS(10), 0);
 		pr_info("hs amp off --");
 
 		msm_hs_pamp = 0;
