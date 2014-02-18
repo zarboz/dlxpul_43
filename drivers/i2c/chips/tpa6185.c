@@ -70,7 +70,7 @@ static int tpa6185_i2c_read(char *rxData, int length);
 static struct dentry *debugfs_tpa_dent;
 static struct dentry *debugfs_peek;
 static struct dentry *debugfs_poke;
-static unsigned char read_data[8] = {0};
+static unsigned char read_data;
 
 static int get_parameters(char *buf, long int *param1, int num_of_par)
 {
@@ -108,7 +108,7 @@ static ssize_t codec_debug_read(struct file *file, char __user *ubuf,
 {
 	char lbuf[8];
 
-	snprintf(lbuf, sizeof(lbuf), "0x%llx\n", *(long long unsigned*)read_data);
+	snprintf(lbuf, sizeof(lbuf), "0x%x\n", read_data);
 	return simple_read_from_buffer(ubuf, count, ppos, lbuf, strlen(lbuf));
 }
 
@@ -144,7 +144,7 @@ static ssize_t codec_debug_write(struct file *filp,
 		if ((param[0] <= 0xFF) && (rc == 0)) {
 			reg_idx[0] = param[0];
 			tpa6185_i2c_write_for_read(reg_idx, 1);
-			tpa6185_i2c_read(read_data, sizeof(HEADSET_AMP_ON));
+			tpa6185_i2c_read(&read_data, sizeof(HEADSET_AMP_ON));
 		} else
 			rc = -EINVAL;
 	}
@@ -202,7 +202,7 @@ static int tpa6185_i2c_write(char *txData, int length)
 		buf[0] = i;
 		buf[1] = txData[i];
 #if DEBUG
-		pr_info("i2c_write %d=%x\n", i, buf[1]);
+		printk(KERN_INFO "[TPA]:i2c_write %d=%x\n", i, buf[1]);
 #endif
 		msg->buf = buf;
 		retry = RETRY_CNT;
@@ -243,7 +243,7 @@ static int tpa6185_i2c_write_for_read(char *txData, int length)
 		buf[0] = i;
 		buf[1] = txData[i];
 #if DEBUG
-		pr_info("i2c_write %d=%x\n", i, buf[1]);
+		printk(KERN_INFO "[TPA]:i2c_write %d=%x\n", i, buf[1]);
 #endif
 		msg->buf = buf;
 		retry = RETRY_CNT;
@@ -287,7 +287,7 @@ static int tpa6185_i2c_read(char *rxData, int length)
 	{
 		int i = 0;
 		for (i = 0; i < length; i++)
-			pr_info("i2c_read %s: rx[%d] = %2x\n", __func__, i, \
+			printk(KERN_INFO "[TPA]:i2c_read %s: rx[%d] = %2x\n", __func__, i, \
 				rxData[i]);
 	}
 
@@ -321,7 +321,7 @@ static int tpa6185_release(struct inode *inode, struct file *file)
 }
 void set_amp(int on, char *i2c_command)
 {
-	pr_info("%s: %d\n", __func__, on);
+	printk(KERN_INFO "[TPA]:%s: %d\n", __func__, on);
 	mutex_lock(&hp_amp_lock);
 	if (on) {
 		if (tpa6185_i2c_write(i2c_command, AMP_ON_CMD_LEN) == 0) {
@@ -408,7 +408,7 @@ static long tpa6185_ioctl(struct file *file, unsigned int cmd,
 
 	switch (cmd) {
 	case TPA6185_WRITE_REG:
-		pr_info("%s: TPA6185_WRITE_REG\n", __func__);
+		printk(KERN_INFO "[TPA]:%s: TPA6185_WRITE_REG\n", __func__);
 		mutex_lock(&hp_amp_lock);
 		if (!last_spkamp_state) {
 			
@@ -416,7 +416,7 @@ static long tpa6185_ioctl(struct file *file, unsigned int cmd,
 		}
 		if (copy_from_user(reg_value, argp, sizeof(reg_value)))
 			goto err1;
-		pr_info("%s: reg_value[0]=%2x, reg_value[1]=%2x\n", __func__,  \
+		printk(KERN_INFO "[TPA]:%s: reg_value[0]=%2x, reg_value[1]=%2x\n", __func__,  \
 				reg_value[0], reg_value[1]);
 		rc = tpa6185_write_reg(reg_value[0], reg_value[1]);
 
@@ -470,7 +470,7 @@ err2:
 			return -EINVAL;
 		}
 		rc = update_amp_parameter(modeid);
-		pr_info("set tpa6185 mode to %d\n", modeid);
+		printk(KERN_INFO "[TPA]:set tpa6185 mode to %d\n", modeid);
 		break;
 	case TPA6185_SET_PARAM:
 		cfg.cmd_data = 0;
@@ -498,7 +498,7 @@ err2:
 			return -EFAULT;
 		}
 		tpa6185_mode_cnt = cfg.mode_num;
-		pr_info("%s: update tpa6185 i2c commands #%d success.\n",
+		printk(KERN_INFO "[TPA]:%s: update tpa6185 i2c commands #%d success.\n",
 				__func__, cfg.data_len);
 		
 		update_amp_parameter(TPA6185_MODE_PLAYBACK_SPKR);
@@ -537,7 +537,7 @@ int tpa6185_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	pdata = client->dev.platform_data;
 
 	if (pdata == NULL) {
-		pr_info("%s: platform data null\n", __func__);
+		printk(KERN_INFO "[TPA]:%s: platform data null\n", __func__);
 		pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
 		if (pdata == NULL) {
 			ret = -ENOMEM;
@@ -575,10 +575,10 @@ int tpa6185_probe(struct i2c_client *client, const struct i2c_device_id *id)
             ret = tpa6185_i2c_read(temp, 2);
 
             if(ret < 0) {
-                pr_info("tpa6185 is not connected\n");
+                printk(KERN_INFO "[TPA]:tpa6185 is not connected\n");
                 tpa6185Connect = 0;
             } else {
-                pr_info("tpa6185 is connected\n");
+                printk(KERN_INFO "[TPA]:tpa6185 is connected\n");
                 tpa6185Connect = 1;
             }
 
@@ -668,7 +668,7 @@ static struct i2c_driver tpa6185_driver = {
 
 static int __init tpa6185_init(void)
 {
-	pr_info("%s\n", __func__);
+	printk(KERN_INFO "[TPA]:%s\n", __func__);
 	mutex_init(&hp_amp_lock);
 	return i2c_add_driver(&tpa6185_driver);
 }

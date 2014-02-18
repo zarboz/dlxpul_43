@@ -183,7 +183,7 @@ static int tfa9887_i2c_write(char *txData, int length)
 	{
 		int i = 0;
 		for (i = 0; i < length; i++)
-			pr_info("%s: tx[%d] = %2x\n", \
+			printk(KERN_INFO "[TFA]:%s: tx[%d] = %2x\n", \
 				__func__, i, txData[i]);
 	}
 #endif
@@ -213,7 +213,7 @@ static int tfa9887_i2c_read(char *rxData, int length)
 	{
 		int i = 0;
 		for (i = 0; i < length; i++)
-			pr_info("i2c_read %s: rx[%d] = %2x\n", __func__, i, \
+			printk(KERN_INFO "[TFA]:i2c_read %s: rx[%d] = %2x\n", __func__, i, \
 				rxData[i]);
 	}
 #endif
@@ -226,7 +226,7 @@ static int tfa9887l_open(struct inode *inode, struct file *file)
 	int rc = 0;
 
 	if (tfa9887l_opened) {
-		pr_info("%s: busy\n", __func__);
+		printk(KERN_INFO "[TFA]:%s: busy\n", __func__);
 	}
 	tfa9887l_opened = 1;
 
@@ -260,7 +260,7 @@ void set_tfa9887l_spkamp(int en, int dsp_mode)
 	unsigned char power_data[3] = {0, 0, 0};
 	unsigned char SPK_CR[3] = {0x8, 0x8, 0};
 
-	pr_info("%s: en = %d dsp_enabled = %d\n", __func__, en, dspl_enabled);
+	printk(KERN_INFO "[TFA]:%s: en = %d dsp_enabled = %d\n", __func__, en, dspl_enabled);
 	mutex_lock(&spk_ampl_lock);
 	if (en && !last_spkampl_state) {
 		last_spkampl_state = 1;
@@ -281,15 +281,11 @@ void set_tfa9887l_spkamp(int en, int dsp_mode)
 			tfa9887_i2c_write(mute_reg, 1);
 			tfa9887_i2c_read(mute_data + 1, 2);
 			mute_data[0] = 0x6;
-			mute_data[2] &= 0xdf;  
+			mute_data[2] &= 0xef;  
 			power_data[0] = 0x9;
 			power_data[2] &= 0xfe; 
-			
 			tfa9887_i2c_write(power_data, 3);
-			
 			tfa9887_i2c_write(mute_data, 3);
-			power_data[2] |= 0x8;  
-			tfa9887_i2c_write(power_data, 3);
 		}
 	} else if (!en && last_spkampl_state) {
 		last_spkampl_state = 0;
@@ -303,17 +299,10 @@ void set_tfa9887l_spkamp(int en, int dsp_mode)
 			tfa9887_i2c_write(mute_reg, 1);
 			tfa9887_i2c_read(mute_data + 1, 2);
 			mute_data[0] = 0x6;
-			mute_data[2] |= 0x20; 
-			
-			tfa9887_i2c_write(mute_data, 3);
-			tfa9887_i2c_write(power_reg, 1);
-			tfa9887_i2c_read(power_data + 1, 2);
+			mute_data[2] |= 0x10; 
 			power_data[0] = 0x9;
-			power_data[2] &= 0xf7;  
-			tfa9887_i2c_write(power_data, 3);
-			
-			
 			power_data[2] |= 0x1;  
+			tfa9887_i2c_write(mute_data, 3);
 			tfa9887_i2c_write(power_data, 3);
 		}
 	}
@@ -363,7 +352,7 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 		}
 		break;
 	case TPA9887_ENABLE_DSP:
-		pr_info("%s: TPA9887_ENABLE_DSP\n", __func__);
+		printk(KERN_INFO "[TFA]:%s: TPA9887_ENABLE_DSP\n", __func__);
 		rc = copy_from_user(reg_value, argp, sizeof(reg_value));;
 		if (rc) {
 			pr_err("%s: copy from user failed.\n", __func__);
@@ -382,7 +371,7 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 
 		len = reg_value[0];
 		
-		pr_debug("TPA9887_KLOCK2 %d\n", reg_value[1]);
+		//printk(KERN_INFO "[TFA]:TPA9887_KLOCK2 %d\n", reg_value[1]);
 		if (reg_value[1])
 		   mutex_lock(&spk_ampl_lock);
 		else
@@ -491,7 +480,7 @@ static struct i2c_driver tfa9887l_driver = {
 
 static int __init tfa9887l_init(void)
 {
-	pr_info("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 	mutex_init(&spk_ampl_lock);
         dspl_enabled = 0;
 	return i2c_add_driver(&tfa9887l_driver);
@@ -512,3 +501,4 @@ module_exit(tfa9887l_exit);
 
 MODULE_DESCRIPTION("tfa9887 L Speaker Amp driver");
 MODULE_LICENSE("GPL");
+
